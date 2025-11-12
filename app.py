@@ -1,10 +1,18 @@
 from flask import Flask, request, send_file, render_template, flash, redirect, url_for
 import os
 from werkzeug.utils import secure_filename
-from docx2pdf import convert
 import tempfile
 from pathlib import Path
-import pythoncom
+import platform
+
+# Use pypandoc for Linux (Azure App Service) and docx2pdf for Windows (local dev)
+IS_WINDOWS = platform.system() == 'Windows'
+
+if IS_WINDOWS:
+    from docx2pdf import convert
+    import pythoncom
+else:
+    import pypandoc
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change this in production
@@ -46,15 +54,22 @@ def convert_docx_to_pdf():
             # Save the uploaded file
             file.save(docx_path)
             
-            # Initialize COM for this thread
-            pythoncom.CoInitialize()
-            
-            try:
-                # Convert to PDF
-                convert(docx_path, pdf_path)
-            finally:
-                # Uninitialize COM
-                pythoncom.CoUninitialize()
+            # Convert to PDF based on platform
+            if IS_WINDOWS:
+                # Windows: Use docx2pdf with COM
+                pythoncom.CoInitialize()
+                try:
+                    convert(docx_path, pdf_path)
+                finally:
+                    pythoncom.CoUninitialize()
+            else:
+                # Linux (Azure): Use pypandoc
+                pypandoc.convert_file(
+                    docx_path,
+                    'pdf',
+                    outputfile=pdf_path,
+                    extra_args=['--pdf-engine=xelatex']
+                )
             
             # Send the PDF file
             return send_file(
@@ -83,4 +98,6 @@ def convert_docx_to_pdf():
         return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5005)
+    # Get port from environment variable for Azure, default to 5005 for local dev
+    port = int(os.environ.get('PORT', 5005))
+    app.run(debug=False, host='0.0.0.0', port=port)
