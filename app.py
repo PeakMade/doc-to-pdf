@@ -1,0 +1,86 @@
+from flask import Flask, request, send_file, render_template, flash, redirect, url_for
+import os
+from werkzeug.utils import secure_filename
+from docx2pdf import convert
+import tempfile
+from pathlib import Path
+import pythoncom
+
+app = Flask(__name__)
+app.secret_key = 'your-secret-key-here'  # Change this in production
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['UPLOAD_FOLDER'] = tempfile.gettempdir()
+
+ALLOWED_EXTENSIONS = {'docx'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/convert', methods=['POST'])
+def convert_docx_to_pdf():
+    # Check if file was uploaded
+    if 'file' not in request.files:
+        flash('No file uploaded')
+        return redirect(url_for('index'))
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        flash('No file selected')
+        return redirect(url_for('index'))
+    
+    if file and allowed_file(file.filename):
+        # Secure the filename
+        filename = secure_filename(file.filename)
+        
+        # Create temporary paths
+        docx_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        pdf_filename = Path(filename).stem + '.pdf'
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
+        
+        try:
+            # Save the uploaded file
+            file.save(docx_path)
+            
+            # Initialize COM for this thread
+            pythoncom.CoInitialize()
+            
+            try:
+                # Convert to PDF
+                convert(docx_path, pdf_path)
+            finally:
+                # Uninitialize COM
+                pythoncom.CoUninitialize()
+            
+            # Send the PDF file
+            return send_file(
+                pdf_path,
+                as_attachment=True,
+                download_name=pdf_filename,
+                mimetype='application/pdf'
+            )
+        
+        except Exception as e:
+            flash(f'Error converting file: {str(e)}')
+            return redirect(url_for('index'))
+        
+        finally:
+            # Clean up temporary files
+            try:
+                if os.path.exists(docx_path):
+                    os.remove(docx_path)
+                if os.path.exists(pdf_path):
+                    os.remove(pdf_path)
+            except:
+                pass
+    
+    else:
+        flash('Invalid file type. Please upload a .docx file')
+        return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5005)
