@@ -4,15 +4,55 @@ from werkzeug.utils import secure_filename
 import tempfile
 from pathlib import Path
 import platform
+from docx import Document
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_LEFT
 
-# Use pypandoc for Linux (Azure App Service) and docx2pdf for Windows (local dev)
+# Use docx2pdf for Windows (local dev) and reportlab for Linux (Azure)
 IS_WINDOWS = platform.system() == 'Windows'
 
 if IS_WINDOWS:
-    from docx2pdf import convert
-    import pythoncom
+    try:
+        from docx2pdf import convert
+        import pythoncom
+        USE_DOCX2PDF = True
+    except ImportError:
+        USE_DOCX2PDF = False
 else:
-    import pypandoc
+    USE_DOCX2PDF = False
+
+def convert_docx_to_pdf_reportlab(docx_path, pdf_path):
+    """Convert DOCX to PDF using python-docx and reportlab"""
+    # Read the DOCX file
+    doc = Document(docx_path)
+    
+    # Create PDF
+    pdf = SimpleDocTemplate(pdf_path, pagesize=letter)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    # Create custom styles
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=11,
+        leading=14,
+        alignment=TA_LEFT
+    )
+    
+    # Process each paragraph
+    for para in doc.paragraphs:
+        if para.text.strip():
+            # Create paragraph with text
+            p = Paragraph(para.text, normal_style)
+            story.append(p)
+            story.append(Spacer(1, 0.2*inch))
+    
+    # Build PDF
+    pdf.build(story)
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change this in production
@@ -55,7 +95,7 @@ def convert_docx_to_pdf():
             file.save(docx_path)
             
             # Convert to PDF based on platform
-            if IS_WINDOWS:
+            if IS_WINDOWS and USE_DOCX2PDF:
                 # Windows: Use docx2pdf with COM
                 pythoncom.CoInitialize()
                 try:
@@ -63,13 +103,8 @@ def convert_docx_to_pdf():
                 finally:
                     pythoncom.CoUninitialize()
             else:
-                # Linux (Azure): Use pypandoc
-                pypandoc.convert_file(
-                    docx_path,
-                    'pdf',
-                    outputfile=pdf_path,
-                    extra_args=['--pdf-engine=xelatex']
-                )
+                # Linux (Azure) or Windows without docx2pdf: Use reportlab
+                convert_docx_to_pdf_reportlab(docx_path, pdf_path)
             
             # Send the PDF file
             return send_file(
