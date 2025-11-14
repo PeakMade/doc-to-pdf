@@ -1,16 +1,14 @@
-# Use Python 3.11 slim image
+﻿# Use Python 3.11 slim image
 FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for PDF conversion
+# Install LibreOffice for high-fidelity DOCX to PDF conversion
+# LibreOffice provides native Microsoft Office format support with full formatting preservation
 RUN apt-get update && apt-get install -y \
-    pandoc \
-    texlive-xetex \
-    texlive-fonts-recommended \
-    texlive-plain-generic \
-    texlive-latex-extra \
+    libreoffice \
+    libreoffice-writer \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching

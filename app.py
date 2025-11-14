@@ -1,12 +1,12 @@
-from flask import Flask, request, send_file, render_template, flash, redirect, url_for
+﻿from flask import Flask, request, send_file, render_template, flash, redirect, url_for
 import os
 from werkzeug.utils import secure_filename
 import tempfile
 from pathlib import Path
 import platform
-import pypandoc
+import subprocess
 
-# Use docx2pdf for Windows (local dev) and pypandoc for Docker/Linux
+# Use docx2pdf for Windows (local dev) and LibreOffice for Docker/Linux
 IS_WINDOWS = platform.system() == 'Windows'
 
 if IS_WINDOWS:
@@ -68,13 +68,18 @@ def convert_docx_to_pdf():
                 finally:
                     pythoncom.CoUninitialize()
             else:
-                # Docker/Linux: Use pypandoc with pandoc
-                pypandoc.convert_file(
-                    docx_path,
-                    'pdf',
-                    outputfile=pdf_path,
-                    extra_args=['--pdf-engine=xelatex']
-                )
+                # Docker/Linux: Use LibreOffice for high-fidelity conversion
+                # LibreOffice preserves all formatting, images, tables, and graphics
+                result = subprocess.run([
+                    'libreoffice',
+                    '--headless',
+                    '--convert-to', 'pdf',
+                    '--outdir', app.config['UPLOAD_FOLDER'],
+                    docx_path
+                ], capture_output=True, text=True, timeout=120)
+                
+                if result.returncode != 0:
+                    raise Exception(f\"LibreOffice conversion failed: {result.stderr}\")
             
             # Send the PDF file
             return send_file(
