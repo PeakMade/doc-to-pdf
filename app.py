@@ -79,7 +79,7 @@ def convert_docx_to_pdf():
                 ], capture_output=True, text=True, timeout=120)
                 
                 if result.returncode != 0:
-                    raise Exception(f\"LibreOffice conversion failed: {result.stderr}\")
+                    raise Exception(f'LibreOffice conversion failed: {result.stderr}')
             
             # Send the PDF file
             return send_file(
