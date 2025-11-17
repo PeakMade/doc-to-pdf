@@ -74,6 +74,18 @@ def perform_conversion(docx_path, pdf_path):
 def index():
     return render_template('index.html')
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    """
+    Health check endpoint for Azure Container Apps monitoring.
+    Returns 200 if service is healthy.
+    """
+    return jsonify({
+        'status': 'healthy',
+        'service': 'docx-to-pdf-converter',
+        'timestamp': __import__('datetime').datetime.utcnow().isoformat()
+    }), 200
+
 @app.route('/convert', methods=['POST'])
 def convert_docx_to_pdf():
     # Check if file was uploaded
